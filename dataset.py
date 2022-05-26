@@ -22,6 +22,9 @@ class LoadDataset:
         mask_token = self.tokenizer.mask_token
 
         example_list = []
+        
+        # test위함
+        data = data[:len(data)//32]
 
         for d in tqdm(data[: len(data)], desc="***making pickle file...: "):
             example_pair = dict()
@@ -40,7 +43,7 @@ class LoadDataset:
                 tokenized_text.extend(tokenized_target[:i])  # tokenized_context + tokenized_question[:i]
                 tokenized_text.append(mask_token)  # tokenized_context + tokenized_question[:i] + [MASK]
                 indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
-                loss_ids = indexed_tokens.copy()
+                loss_ids = indexed_tokens.copy()[:-1] # MASK 토큰 제외하고
 
                 if i == len(tokenized_target):
                     loss_ids.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(sep_token))[0])
@@ -99,12 +102,15 @@ class LoadDataset:
 
 
 class SquadDataset(Dataset):
-    def __init__(self, data):  # tokenized 된 것과 라벨이 들어옴
+    def __init__(self, data, labels):  # tokenized 된 것과 라벨이 들어옴
         self.data = data
+        self.labels = labels
 
     def __len__(self):  # data의 전체 길이
-        return len(self.data)
+        return len(self.labels)
 
     def __getitem__(self, idx):
         item = {key: val[idx].clone().detach() for key, val in self.data.items()}
+        item["labels"] = torch.tensor(self.labels[idx])
+
         return item

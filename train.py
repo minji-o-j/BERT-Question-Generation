@@ -32,7 +32,7 @@ def get_config():
 
     """train options"""
     parser.add_argument("--train_data_path", type=str, default="./data/squad_nqg/train.json", help="(default: ./data/squad_nqg/train.json)")
-    parser.add_argument("--train_pickle_path", type=str, default="./squad_train.pickle", help="(default: squad_train.pickle)")
+    parser.add_argument("--train_pickle_path", type=str, default="./squad_train_32.pickle", help="(default: squad_train.pickle)")
     parser.add_argument("--num_train_epochs", type=int, default=800, help="(default: )")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="learning rage (default: 5e-5)")
     parser.add_argument("--batch_size", type=int, default=32, help="(default: 16)")
@@ -74,16 +74,16 @@ def prepare_train_dataset(args, device, tokenizer):
 
     # padding and make labels
     train_label_list = load_dataset.make_labels(pad_len, train_label)
-    train_tokenized["labels"] = train_label_list.clone()
+    #train_tokenized["labels"] = train_label_list.clone()
 
+    
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    train_dataloader = DataLoader(SquadDataset(train_tokenized), shuffle=True, batch_size=args.batch_size, collate_fn=data_collator)
+    train_dataloader = DataLoader(SquadDataset(train_tokenized,train_label_list), shuffle=True, batch_size=args.batch_size, collate_fn=data_collator)
     t_total = len(train_tokenized) // args.gradient_accumulation_steps * args.num_train_epochs
 
     # check dataloader
     try:
-        for batch in train_dataloader:
-            # print(batch)
+        for i,batch in enumerate(train_dataloader):
             break
         {k: v.shape for k, v in batch.items()}
         print("*** dataloader works successfully!")
@@ -91,7 +91,7 @@ def prepare_train_dataset(args, device, tokenizer):
     except:
         print("*** something wrong in dataloader!")
         assert False
-
+    
     return t_total, train_dataloader
 
 
@@ -124,12 +124,9 @@ def train(args):
     for epoch in range(args.num_train_epochs):
         eveloss = 0
         train_loader = tqdm(train_dataloader, desc="Loading train dataset")
-        for j, batch in enumerate(train_loader):
+        for j, batch in (train_loader):
+
             batch = {k: v.to(device) for k, v in batch.items()}
-            print('----------------------------------------------------------------------------')
-            print(batch)
-            print('----------------------------------------------------------------------------')
-            assert False
             outputs = model(**batch)  # k,labels=v)
             loss = outputs.loss
             eveloss += loss.mean().item()
@@ -140,7 +137,7 @@ def train(args):
         if epoch % 50 == 0:
             torch.save(model.state_dict(), f"model_weights_{epoch}_{eveloss}.pth")
         print("epoch " + str(epoch) + " : " + str(eveloss))
-        
+
     torch.save(model.state_dict(), f"model_weights_{epoch}_{eveloss}.pth")
 
 
