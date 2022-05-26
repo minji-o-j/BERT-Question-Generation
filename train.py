@@ -4,9 +4,10 @@ import torch.nn as nn
 import torch
 import pickle
 import random
-import json
 import os
 import argparse
+import wandb
+
 from dataset import *
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
@@ -29,13 +30,14 @@ def get_config():
     """init options"""
     parser.add_argument("--seed", type=int, default=42, help="random seed (default: 42)")
     parser.add_argument("--model", type=str, default="bert-base-uncased", help="(default: bert-base-uncased)")
+    parser.add_argument("--wandb_name", type=str, default="BERT-HLSQG", help="(default: )")
 
     """train options"""
     parser.add_argument("--train_data_path", type=str, default="./data/squad_nqg/train.json", help="(default: ./data/squad_nqg/train.json)")
-    parser.add_argument("--train_pickle_path", type=str, default="./squad_train_32.pickle", help="(default: squad_train.pickle)")
-    parser.add_argument("--num_train_epochs", type=int, default=10, help="(default: )")
+    parser.add_argument("--train_pickle_path", type=str, default="./squad_train.pickle", help="(default: squad_train.pickle)")
+    parser.add_argument("--num_train_epochs", type=int, default=10, help="(default: 5)")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="learning rage (default: 5e-5)")
-    parser.add_argument("--batch_size", type=int, default=64, help="(default: 32)")
+    parser.add_argument("--batch_size", type=int, default=32, help="(default: 32)")
 
     # not frequently used
     parser.add_argument("--adam_epsilon", type=float, default=1e-8, help="(default: )")
@@ -52,8 +54,6 @@ def get_config():
 
 
 def prepare_train_dataset(args, device, tokenizer):
-    seed_everything(args.seed)
-
     load_dataset = LoadDataset(tokenizer, device)
 
     # check file
@@ -74,16 +74,14 @@ def prepare_train_dataset(args, device, tokenizer):
 
     # padding and make labels
     train_label_list = load_dataset.make_labels(pad_len, train_label)
-    #train_tokenized["labels"] = train_label_list.clone()
 
-    
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    train_dataloader = DataLoader(SquadDataset(train_tokenized,train_label_list), shuffle=True, batch_size=args.batch_size, collate_fn=data_collator)
+    train_dataloader = DataLoader(SquadDataset(train_tokenized, train_label_list), shuffle=True, batch_size=args.batch_size, collate_fn=data_collator)
     t_total = len(train_tokenized) // args.gradient_accumulation_steps * args.num_train_epochs
 
     # check dataloader
     try:
-        for i,batch in enumerate(train_dataloader):
+        for i, batch in enumerate(train_dataloader):
             break
         {k: v.shape for k, v in batch.items()}
         print("*** dataloader works successfully!")
@@ -91,15 +89,27 @@ def prepare_train_dataset(args, device, tokenizer):
     except:
         print("*** something wrong in dataloader!")
         assert False
-    
+
     return t_total, train_dataloader
 
 
 def train(args):
+    seed_everything(args.seed)
+
+    # wandb
+    config = {
+        "datatype": args.train_pickle_path,
+        "pretrained_model": args.model,
+        "lr": args.learning_rate,
+        "batch_size": args.batch_size,
+        "num_train_epochs": args.num_train_epochs,
+    }
+    wandb.init(project="BERT-HLSQG", entity="minji913", name=args.wandb_name, group=args.model, config=config)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print('Current cuda device:', torch.cuda.current_device())
-    print('Count of using GPUs:', torch.cuda.device_count())
-    
+    print("Current cuda device:", torch.cuda.current_device())
+    print("Count of using GPUs:", torch.cuda.device_count())
+
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForMaskedLM.from_pretrained(args.model)
     model.to(device)
@@ -109,8 +119,9 @@ def train(args):
     # add token number
     model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
 
+    # Multi-GPU
     model = nn.DataParallel(model)
-    
+
     t_total, train_dataloader = prepare_train_dataset(args, device, tokenizer)
     print(f"***t_total: {t_total}, len train_dataloader: {len(train_dataloader)}")
     no_decay = ["bias", "LayerNorm.weight"]
@@ -139,8 +150,10 @@ def train(args):
             optimizer.step()
             optimizer.zero_grad()
             train_loader.set_description("Loss %.04f | step %d" % (loss.mean(), j))
+            wandb.log({"train_loss": loss.mean()})
         torch.save(model.state_dict(), f"model_weights_{epoch}_{eveloss}.pth")
         print("epoch " + str(epoch) + " : " + str(eveloss))
+        wandb.log({"epoch_loss": eveloss})
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ class LoadDataset:
                 tokenized_text.extend(tokenized_target[:i])  # tokenized_context + tokenized_question[:i]
                 tokenized_text.append(mask_token)  # tokenized_context + tokenized_question[:i] + [MASK]
                 indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
-                loss_ids = indexed_tokens.copy()
+                loss_ids = indexed_tokens.copy()[:-1]
 
                 if i == len(tokenized_target):
                     loss_ids.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(sep_token))[0])
@@ -53,7 +53,7 @@ class LoadDataset:
                 loss_tensors = torch.tensor([loss_ids]).to(self.device)
                 input_ids = self.tokenizer.convert_tokens_to_ids(tokenized_text)
                 decodes_ids = self.tokenizer.decode(input_ids)
-                example_pair[decodes_ids] = loss_tensors
+                #example_pair[decodes_ids] = loss_tensors
                 
                 example_pair[tokens_tensor] = loss_tensors
 
