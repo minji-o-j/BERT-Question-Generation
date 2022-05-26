@@ -1,12 +1,12 @@
 import torch.nn.functional as F
 import numpy as np
+import torch.nn as nn
 import torch
 import pickle
 import random
 import json
 import os
 import argparse
-
 from dataset import *
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
@@ -33,9 +33,9 @@ def get_config():
     """train options"""
     parser.add_argument("--train_data_path", type=str, default="./data/squad_nqg/train.json", help="(default: ./data/squad_nqg/train.json)")
     parser.add_argument("--train_pickle_path", type=str, default="./squad_train_32.pickle", help="(default: squad_train.pickle)")
-    parser.add_argument("--num_train_epochs", type=int, default=800, help="(default: )")
+    parser.add_argument("--num_train_epochs", type=int, default=10, help="(default: )")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="learning rage (default: 5e-5)")
-    parser.add_argument("--batch_size", type=int, default=32, help="(default: 16)")
+    parser.add_argument("--batch_size", type=int, default=64, help="(default: 32)")
 
     # not frequently used
     parser.add_argument("--adam_epsilon", type=float, default=1e-8, help="(default: )")
@@ -97,6 +97,9 @@ def prepare_train_dataset(args, device, tokenizer):
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('Current cuda device:', torch.cuda.current_device())
+    print('Count of using GPUs:', torch.cuda.device_count())
+    
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForMaskedLM.from_pretrained(args.model)
     model.to(device)
@@ -106,6 +109,8 @@ def train(args):
     # add token number
     model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
 
+    model = nn.DataParallel(model)
+    
     t_total, train_dataloader = prepare_train_dataset(args, device, tokenizer)
     print(f"***t_total: {t_total}, len train_dataloader: {len(train_dataloader)}")
     no_decay = ["bias", "LayerNorm.weight"]
@@ -124,21 +129,18 @@ def train(args):
     for epoch in range(args.num_train_epochs):
         eveloss = 0
         train_loader = tqdm(train_dataloader, desc="Loading train dataset")
-        for j, batch in (train_loader):
+        for j, batch in enumerate(train_loader):
 
             batch = {k: v.to(device) for k, v in batch.items()}
             outputs = model(**batch)  # k,labels=v)
             loss = outputs.loss
             eveloss += loss.mean().item()
-            loss.backward()
+            loss.mean().backward()
             optimizer.step()
             optimizer.zero_grad()
-            train_loader.set_description("Loss %.04f | step %d" % (loss, j))
-        if epoch % 50 == 0:
-            torch.save(model.state_dict(), f"model_weights_{epoch}_{eveloss}.pth")
+            train_loader.set_description("Loss %.04f | step %d" % (loss.mean(), j))
+        torch.save(model.state_dict(), f"model_weights_{epoch}_{eveloss}.pth")
         print("epoch " + str(epoch) + " : " + str(eveloss))
-
-    torch.save(model.state_dict(), f"model_weights_{epoch}_{eveloss}.pth")
 
 
 if __name__ == "__main__":
