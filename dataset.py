@@ -1,5 +1,5 @@
 from os import device_encoding
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from tqdm import tqdm
 import json
 import torch
@@ -22,10 +22,6 @@ class LoadDataset:
         mask_token = self.tokenizer.mask_token
 
         example_list = []
-
-        # test위함
-        if pickle_path == "./squad_train_32.pickle":
-            data = data[: len(data) // 32]
 
         for d in tqdm(data[: len(data)], desc="***making pickle file...: "):
             example_pair = dict()
