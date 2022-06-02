@@ -10,8 +10,8 @@ import wandb
 
 from dataset import *
 from tqdm import tqdm
-from torch.utils.data import Dataset, DataLoader
-from transformers import AdamW, get_linear_schedule_with_warmup, AutoModelForMaskedLM, AutoConfig, AutoTokenizer, DataCollatorWithPadding
+from torch.utils.data import DataLoader
+from transformers import AdamW, get_linear_schedule_with_warmup, AutoModelForMaskedLM, AutoTokenizer, DataCollatorWithPadding
 
 
 def seed_everything(seed):
