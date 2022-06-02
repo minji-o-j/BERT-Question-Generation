@@ -18,7 +18,8 @@ def get_config():
     parser.add_argument("--save_txt_path", type=str, default="./test.txt", help="(default: ./test.txt)")
 
     """prediction options"""
-    parser.add_argument("--max_tokens", type=int, default=20, help="(default: 20)")
+    parser.add_argument("--max_question_token_len", type=int, default=20, help="(default: 20)")
+    parser.add_argument("--max_len", type=int, default=512, help="(bert max token len, default: 512)")
     # parser.add_argument("", type=, default=, help="(default: )")
 
     args = parser.parse_args()
@@ -66,9 +67,11 @@ def inference(args):
         context_tokenized = tokenizer.encode(context, add_special_tokens=False)  # token id --> [CLS] + passage with [HL] + [SEP]
         pred_str_list = []  # 새롭게 예측된 토큰이 저장됨
 
-        for _ in range(args.max_tokens):  # 최대 토큰 개수 20개로 제한
+        for _ in range(args.max_question_token_len):  # 최대 토큰 개수 20개로 제한
             pred_str_ids = tokenizer.convert_tokens_to_ids(pred_str_list + [mask_token])  # mask token을 뒤에 붙여줘야함
             predict_token = context_tokenized + pred_str_ids
+            if len(predict_token) >= args.max_len:
+                break
             predict_token = torch.tensor([predict_token])  # [[tokens]] 형태로 들어가야지 model에 들어갈 수 있음
             predictions = model(predict_token)  # [CLS] + tokenized passage with [HL] + [SEP] + predicted question + [MASK]
             predicted_index = torch.argmax(predictions[0][0][-1]).item()
