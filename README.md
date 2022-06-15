@@ -12,7 +12,7 @@ BERT-HLSQG|49.73|34.60|26.13|20.33|23.88|48.23
 <br>
 
 
-### My Model
+### My Model (Epoch 5, bert-base-uncased)
 Model|BLEU1|BLEU2|BLEU3|BLEU4|METEOR|ROUGE-L
 :---:|:---:|:---:|:---:|:---:|:---:|:---:
 BERT-HLSQG|52.26|33.19|22.48|15.64|22.66|45.48
